@@ -19,9 +19,21 @@ from slugify import slugify
 
 load_dotenv()
 
+def get_email():
+    email = os.environ.get("EMAIL")
+    if email:
+        return email
+    try:
+        import subprocess
+        email = subprocess.check_output(['git', 'config', '--get', 'user.email'], stderr=subprocess.STDOUT).strip().decode()
+        if not email:
+            raise ValueError("Email is empty")
+    except Exception as e:
+        raise RuntimeError("Can't get email") from e
+
 BLOG_TITLE = "the blog"
 MY_NAME = os.environ["NAME"]
-EMAIL = os.environ["EMAIL"]
+EMAIL = get_email()
 HEADER_LINKS = [
     ("github", "https://github.com/p7g"),
     ("linkedin", "https://linkedin.com/pat775"),
@@ -136,46 +148,51 @@ class Post:
         return f"/posts/{self.slug}"
 
 
-posts = []
+def get_posts():
+    posts = []
 
-with os.scandir("posts") as it:
-    for post_file in it:
-        if not post_file.is_file() or post_file.name.startswith("."):
-            continue
+    with os.scandir("posts") as it:
+        for post_file in it:
+            if not post_file.is_file() or post_file.name.startswith("."):
+                continue
 
-        with open(post_file.path, "r") as f:
-            text = f.read()
+            with open(post_file.path, "r") as f:
+                text = f.read()
 
-        post_raw = frontmatter.loads(text)
+            post_raw = frontmatter.loads(text)
 
-        date = post_raw["date"]
-        if isinstance(date, str):
-            date = dt.date.fromisoformat(date)
+            date = post_raw["date"]
+            if isinstance(date, str):
+                date = dt.date.fromisoformat(date)
 
-        posts.append(
-            Post(
-                title=post_raw["title"],
-                description=post_raw.get("description"),
-                date=date,
-                html=mistletoe.markdown(post_raw.content),
+            posts.append(
+                Post(
+                    title=post_raw["title"],
+                    description=post_raw.get("description"),
+                    date=date,
+                    html=mistletoe.markdown(post_raw.content),
+                )
             )
-        )
 
 
-posts = list(sorted(posts, key=attrgetter("date")))
+    posts = list(sorted(posts, key=attrgetter("date")))
+    return posts
 
-shutil.rmtree("build")
-os.makedirs(os.path.join("build", "posts"), exist_ok=True)
+if __name__ == "__main__":
+    posts = get_posts()
+    if os.path.exists("build"):
+        shutil.rmtree("build")
+    os.makedirs(os.path.join("build", "posts"), exist_ok=True)
 
-# generate main page
-with open(os.path.join("build", "index.html"), "w") as f:
-    f.write(home_page(posts))
+    # generate main page
+    with open(os.path.join("build", "index.html"), "w") as f:
+        f.write(home_page(posts))
 
-sass.compile(dirname=("css", os.path.join("build", "css")), output_style="compressed")
+    sass.compile(dirname=("css", os.path.join("build", "css")), output_style="compressed")
 
-for post in posts:
-    post_dir = os.path.join("build", "posts", post.slug)
-    os.makedirs(post_dir, exist_ok=False)
+    for post in posts:
+        post_dir = os.path.join("build", "posts", post.slug)
+        os.makedirs(post_dir, exist_ok=False)
 
-    with open(os.path.join(post_dir, "index.html"), "w") as f:
-        f.write(post_page(post))
+        with open(os.path.join(post_dir, "index.html"), "w") as f:
+            f.write(post_page(post))

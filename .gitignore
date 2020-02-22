@@ -1,5 +1,7 @@
 build
 .vim
+.vscode/
 .mypy_cache
+__pycache__
 posts/*.md
 .env
